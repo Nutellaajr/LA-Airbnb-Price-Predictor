@@ -4,8 +4,11 @@ import joblib
 import numpy as np
 import pandas as pd
 import pydeck as pdk
+import sklearn
 import streamlit as st
 
+
+print(f"Debug: scikit-learn version {sklearn.__version__}")
 
 st.set_page_config(
     page_title="LA Airbnb Price Predictor",
@@ -127,6 +130,81 @@ def median_value(data, column, fallback):
     return fallback if pd.isna(value) else value
 
 
+def expected_preprocessor_columns(preprocessor):
+    if hasattr(preprocessor, "feature_names_in_"):
+        return list(preprocessor.feature_names_in_)
+
+    columns = []
+    transformers = getattr(preprocessor, "transformers_", getattr(preprocessor, "transformers", []))
+    for _, _, transformer_columns in transformers:
+        if isinstance(transformer_columns, str):
+            columns.append(transformer_columns)
+        else:
+            columns.extend(list(transformer_columns))
+    return columns
+
+
+def safe_default_for_column(data, column):
+    numeric_fallbacks = {
+        "accommodates": 1,
+        "bathrooms": 1.0,
+        "bedrooms": 1.0,
+        "beds": 1.0,
+        "minimum_nights": 1,
+        "availability_365": 180,
+        "number_of_reviews": 0,
+        "review_scores_rating": 4.8,
+        "host_response_rate": 1.0,
+        "latitude": 34.0522,
+        "longitude": -118.2437,
+        "beds_per_bedroom": 1.0,
+        "bath_per_person": 0.5,
+        "room_density": 1.0,
+        "host_tenure_days": 0,
+        "host_tenure_years": 0.0,
+        "host_join_year": REFERENCE_DATE.year,
+        "host_join_month": REFERENCE_DATE.month,
+        "dist_to_hollywood": 0.0,
+        "dist_to_beverly_hills": 0.0,
+        "dist_to_santa_monica_beach": 0.0,
+        "dist_to_downtown_la": 0.0,
+        "dist_to_lax_airport": 0.0,
+        "dist_to_venice_beach": 0.0,
+        "min_dist_to_landmark": 0.0,
+    }
+    categorical_fallbacks = {
+        "host_response_time": "unknown",
+        "neighbourhood_cleansed": "Unknown",
+        "neighbourhood_group_cleansed": "Unknown",
+        "room_type": "Entire home/apt",
+        "property_type_grouped": "Other",
+        "license_status": "none",
+    }
+
+    if column in BOOLEAN_FEATURES:
+        return float(median_value(data, column, 0))
+    if column in numeric_fallbacks:
+        return median_value(data, column, numeric_fallbacks[column])
+    if column in categorical_fallbacks:
+        return most_common_value(data, column, categorical_fallbacks[column])
+    return np.nan
+
+
+def align_features_for_preprocessor(features, preprocessor, training_data):
+    expected_columns = expected_preprocessor_columns(preprocessor)
+    if not expected_columns:
+        expected_columns = ALL_FEATURES
+
+    aligned = features.copy()
+    missing_columns = [col for col in expected_columns if col not in aligned.columns]
+    extra_columns = [col for col in aligned.columns if col not in expected_columns]
+
+    for col in missing_columns:
+        aligned[col] = safe_default_for_column(training_data, col)
+
+    return aligned[expected_columns], expected_columns, missing_columns, extra_columns
+
+
 def haversine(lat1, lon1, lat2, lon2):
     radius_km = 6371
     lat1, lon1, lat2, lon2 = map(np.radians, [lat1, lon1, lat2, lon2])
@@ -177,8 +255,21 @@ def engineer_listing_features(raw_input, grouped_property_types):
     return features[ALL_FEATURES]
 
 
-def dollar_prediction(model, preprocessor, listing_features):
-    processed = preprocessor.transform(listing_features)
+def dollar_prediction(model, preprocessor, listing_features, training_data):
+    aligned_features, expected_columns, missing_columns, extra_columns = align_features_for_preprocessor(
+        listing_features, preprocessor, training_data
+    )
+    try:
+        processed = preprocessor.transform(aligned_features)
+    except Exception as exc:
+        st.error("The preprocessor could not transform the listing features.")
+        st.write("Missing columns filled with defaults:", missing_columns or "None")
+        st.write("Extra columns removed before transform:", extra_columns or "None")
+        st.write("Expected columns:", expected_columns)
+        st.write("Columns sent to preprocessor:", aligned_features.columns.tolist())
+        st.exception(exc)
+        return None
+
     predicted_log_price = model.predict(processed)[0]
     return max(0, float(np.expm1(predicted_log_price)))
 
@@ -279,6 +370,7 @@ def show_missing_model_message(missing):
 def main():
     st.title("LA Airbnb Price Predictor")
     st.caption("Predict nightly prices and explore how listing prices vary across Los Angeles.")
+    st.caption(f"Debug: scikit-learn version {sklearn.__version__}")
 
     listings = load_listing_data()
     model, preprocessor, missing = load_model_assets()
@@ -453,9 +545,10 @@ def main():
                 "license_status": license_status,
             }
             listing_features = engineer_listing_features(raw_input, known_grouped_property_types(listings))
-            prediction = dollar_prediction(model, preprocessor, listing_features)
-            st.metric("Predicted nightly price", f"${prediction:,.0f}")
-            st.caption("The model predicts `log_price = log(1 + price)`; this app converts it back with `np.expm1()`.")
+            prediction = dollar_prediction(model, preprocessor, listing_features, listings)
+            if prediction is not None:
+                st.metric("Predicted nightly price", f"${prediction:,.0f}")
+                st.caption("The model predicts `log_price = log(1 + price)`; this app converts it back with `np.expm1()`.")
 
     with map_tab:
         st.subheader("Explore LA Airbnb Prices")
