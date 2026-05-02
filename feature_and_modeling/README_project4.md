@@ -1,0 +1,215 @@
+#  LA Airbnb Price Predictor
+
+> **Predicting Airbnb Listing Prices in Los Angeles — An End-to-End Machine Learning Project**
+
+[![Streamlit App](https://img.shields.io/badge/Live%20App-Streamlit-FF4B4B?logo=streamlit)](https://la-airbnb-price-predictor-nrjtqc6ajumwv7ahtodvsd.streamlit.app/)
+[![Python](https://img.shields.io/badge/Python-3.9+-3776AB?logo=python)](https://www.python.org/)
+[![scikit-learn](https://img.shields.io/badge/scikit--learn-1.x-F7931E?logo=scikit-learn)](https://scikit-learn.org/)
+
+---
+
+##  Project Overview
+
+This project builds a complete end-to-end machine learning pipeline to predict the nightly price of Airbnb listings in Los Angeles. Starting from raw listing-level data from Inside Airbnb, we clean, explore, engineer features, and train multiple supervised regression models — ultimately deploying the best model as an interactive web application.
+
+**Research Question:**
+> *What factors determine the nightly price of an Airbnb listing in Los Angeles, and how accurately can we predict the price of a new listing from its observable characteristics?*
+
+**Best Model:** Tuned Gradient Boosting Regressor
+- Test R² = **0.836** (explains 83.6% of price variance)
+- Test MAE = **$82.04** per night
+
+**Live App:** [https://la-airbnb-price-predictor-nrjtqc6ajumwv7ahtodvsd.streamlit.app/](https://la-airbnb-price-predictor-nrjtqc6ajumwv7ahtodvsd.streamlit.app/)
+
+---
+
+##  Team Members
+
+| Member | UNI | Primary Role |
+|--------|-----|-------------|
+| Tiange Wang | tw3106 | Data Acquisition & Cleaning |
+| Wenyang Zu | wz2744 | EDA & Unsupervised Learning |
+| Yao Ouyang | yo2394 | Feature Engineering & Supervised Modeling |
+| Zuer Weng | zw3118 | Model Comparison & Report Writing |
+
+Detailed task contributions are provided in the final report.
+
+---
+
+##  Repository Structure
+
+```
+LA-Airbnb-Price-Predictor/
+│
+├── .devcontainer/
+│   └── devcontainer.json
+│
+├── feature_and_modeling/
+│   ├── feature_and_modeling_code.ipynb      # Feature engineering, modeling & evaluation
+│   ├── listings_clean.csv                   # Cleaned dataset used for modeling
+│   ├── data_with_features.csv               # Dataset after feature engineering
+│   ├── preprocessor.pkl                     # Fitted sklearn preprocessing pipeline
+│   ├── final_model.pkl                      # Trained Gradient Boosting model
+│   ├── model_comparison.csv                 # Performance metrics for all models
+│   ├── feature_importance.csv               # Feature importances from final model
+│   ├── feature_names.csv                    # Feature name list after encoding
+│   ├── X_train_processed.npy                # Processed training features
+│   ├── X_test_processed.npy                 # Processed test features
+│   ├── y_train.npy                          # Training labels (log_price)
+│   ├── y_test.npy                           # Test labels (log_price)
+│   ├── baseline_comparison.png              # Baseline model comparison chart
+│   ├── tuning_results.png                   # Hyperparameter tuning results
+│   ├── feature_importance.png               # Top feature importance chart
+│   └── feature_importance_by_category.png   # Aggregated feature importance chart
+│
+├── IA_CLEAN.ipynb                           # Data acquisition & cleaning
+├── EDA.ipynb                                # Exploratory data analysis
+├── EDA+Unsupervised_Learning.ipynb          # EDA + K-Means clustering + PCA
+├── listings_clean.csv                       # Cleaned dataset copy in root directory
+├── app.py                                   # Streamlit web application
+├── requirements.txt                         # Python dependencies
+├── runtime.txt                              # Runtime configuration for deployment
+└── README.md
+```
+
+---
+
+##  Data Source
+
+- **Source:** [Inside Airbnb](http://insideairbnb.com/get-the-data/) — Los Angeles, CA
+- **Snapshot Date:** September 4, 2024
+- **Total Listings:** 37,296 (after cleaning)
+- **Raw Features:** 26 columns covering host info, property attributes, geolocation, pricing, availability, and reviews
+- **Price Range:** Min $5 · Median $155 · Mean $289 · Max $56,425 per night
+
+---
+
+##  How to Run
+
+### 1. Clone the repository
+
+```bash
+git clone https://github.com/Nutellaajr/LA-Airbnb-Price-Predictor.git
+cd LA-Airbnb-Price-Predictor
+```
+
+### 2. Install dependencies
+
+```bash
+pip install -r requirements.txt
+```
+
+### 3. Run the notebooks (in order)
+
+```
+1. IA_CLEAN.ipynb                                  → produces listings_clean.csv
+2. EDA.ipynb                                       → exploratory analysis
+3. EDA+Unsupervised_Learning.ipynb                 → clustering & PCA
+4. feature_and_modeling/feature_and_modeling_code.ipynb → feature engineering, model training & evaluation
+```
+
+### 4. Launch the Streamlit app
+
+```bash
+streamlit run app.py
+```
+
+Then open `http://localhost:8501` in your browser.
+
+> **Note:** The app requires `final_model.pkl` and `preprocessor.pkl` in the `feature_and_modeling/` folder. These are generated by running `feature_and_modeling/feature_and_modeling_code.ipynb`.
+
+---
+
+##  Pipeline Summary
+
+### 1. Data Cleaning (`IA_CLEAN.ipynb`)
+- Parsed price strings (e.g., `"$1,200.00"` → float)
+- Handled missing values: created `host_never_responded` flag, deferred imputation to pipeline
+- Converted boolean columns from `"t"/"f"` strings to proper types
+- Parsed `host_since` as datetime for tenure feature engineering
+- Retained high-price outliers with log-transformation mitigation
+
+### 2. EDA & Unsupervised Learning
+- Analyzed price distribution (right-skewed, skewness > 15) → motivated log transformation
+- Key findings: room type, capacity (bedrooms/bathrooms), and geography are dominant price drivers
+- **K-Means clustering (k=2):** Separated market into higher-priced vs. lower-priced listing segments
+- **PCA:** Confirmed capacity (PC1) and geography (PC2) as the two main axes of variation
+
+### 3. Feature Engineering
+| Category | Features |
+|----------|----------|
+| **Capacity Ratios** | `beds_per_bedroom`, `bath_per_person`, `room_density` |
+| **Host Experience** | `host_tenure_days`, `host_tenure_years`, `host_join_year`, `host_join_month` |
+| **Geographic Distance** | `dist_to_hollywood`, `dist_to_beverly_hills`, `dist_to_santa_monica_beach`, `dist_to_downtown_la`, `dist_to_lax_airport`, `dist_to_venice_beach`, `min_dist_to_landmark` |
+| **Categorical** | `property_type_grouped` (65 → consolidated categories) |
+
+### 4. Preprocessing Pipeline (sklearn)
+- **Numerical:** Median imputation → StandardScaler
+- **Categorical:** Mode imputation → OneHotEncoder (`handle_unknown='ignore'`)
+- **Boolean:** Cast to float → Median imputation
+- Feature matrix: 27 → **342 columns** after encoding
+- Pipeline fit on training data only (no data leakage)
+
+### 5. Models Trained
+
+| Model | CV R² | Test R² | Test RMSE | Test MAE |
+|-------|-------|---------|-----------|----------|
+| **Gradient Boosting (Tuned) ★** | **0.8315 ±0.0045** | **0.8359** | **$310.23** | **$82.04** |
+| Random Forest (Tuned) | 0.8238 ±0.0056 | 0.8301 | $323.06 | $83.05 |
+| Random Forest (Baseline) | 0.8153 ±0.0047 | 0.8229 | $320.22 | $83.67 |
+| Gradient Boosting (Baseline) | 0.7748 ±0.0071 | 0.7825 | $370.24 | $97.05 |
+| Ridge Regression | 0.7464 ±0.0124 | 0.7656 | $378.76 | $101.78 |
+| Linear Regression | 0.7461 ±0.0122 | 0.7654 | $378.69 | $101.83 |
+
+★ = selected final model · All metrics on held-out test set (n = 7,459)
+
+---
+
+##  Key Findings
+
+1. **Physical capacity dominates pricing** — bedrooms alone account for **33.5%** of total feature importance, more than all geographic features combined
+2. **Location matters, but less than size** — longitude/latitude + 5 engineered landmark-distance features appear in the top 20 predictors; distance to LAX ranks higher than distance to Hollywood
+3. **Room type is the third strongest signal** — entire home listings command a clear premium over private/shared rooms
+4. **Tuning Gradient Boosting is critical** — default parameters underperform Random Forest; tuned parameters improve Test R² by +5.4pp
+5. **Market has two broad price segments** — K-Means (k=2) cleanly separates higher-priced (entire homes, coastal) from lower-priced (private rooms, inland) listings
+
+---
+
+##  Web Application
+
+The Streamlit app has three tabs:
+
+| Tab | Description |
+|-----|-------------|
+| **Price Predictor** | Input listing attributes and get an instant price estimate. All feature engineering (Haversine distances, capacity ratios, host tenure) is computed automatically. |
+| **Map Explorer** | Interactive PyDeck map of all LA listings, filterable by room type, price range, neighbourhood, and bedroom count. |
+| **Feature Importance** | Adjustable bar chart showing top-N most important model features. |
+
+**Live:** [https://la-airbnb-price-predictor-nrjtqc6ajumwv7ahtodvsd.streamlit.app/](https://la-airbnb-price-predictor-nrjtqc6ajumwv7ahtodvsd.streamlit.app/)
+
+---
+
+##  Requirements
+
+Key dependencies (see `requirements.txt` for full list):
+
+```
+streamlit
+scikit-learn
+pandas
+numpy
+joblib
+pydeck
+matplotlib
+seaborn
+```
+
+---
+
+##  References
+
+- Inside Airbnb. (2024). *Los Angeles listing data — September 4, 2024.* http://insideairbnb.com/get-the-data/
+- Pedregosa, F. et al. (2011). Scikit-learn: Machine Learning in Python. *JMLR*, 12, 2825–2830.
+- Breiman, L. (2001). Random Forests. *Machine Learning*, 45(1), 5–32.
+- Friedman, J. H. (2001). Greedy Function Approximation: A Gradient Boosting Machine. *Annals of Statistics*, 29(5), 1189–1232.
+- Hoerl, A. E., & Kennard, R. W. (1970). Ridge Regression: Biased Estimation for Nonorthogonal Problems. *Technometrics*, 12(1), 55–67.
